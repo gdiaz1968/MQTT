@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitor MQTT - Planta</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            text-align: center;
+            padding: 40px;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 30px;
+            display: inline-block;
+            min-width: 300px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.4);
+        }
+
+        .valor {
+            font-size: 64px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+
+        .label {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+
+        .estado {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+
+        .ok {
+            color: #22c55e;
+        }
+
+        .error {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📡 Monitor de Producción</h1>
+
+    <div class="card">
+        <div class="label">Valor actual</div>
+        <div id="valor" class="valor">--</div>
+
+        <div class="label">Última actualización</div>
+        <div id="fecha">--</div>
+
+        <div class="label">Máquina</div>
+        <div id="maquina">--</div>
+
+        <div class="estado" id="estado">Conectando...</div>
+    </div>
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000
+        })
+
+        const valorEl = document.getElementById('valor')
+        const fechaEl = document.getElementById('fecha')
+        const maquinaEl = document.getElementById('maquina')
+        const estadoEl = document.getElementById('estado')
+
+        // ==========================
+        // Conexión
+        // ==========================
+        socket.on('connect', () => {
+            estadoEl.innerText = '🟢 Conectado al servidor'
+            estadoEl.className = 'estado ok'
+        })
+
+        socket.on('disconnect', () => {
+            estadoEl.innerText = '🔴 Desconectado'
+            estadoEl.className = 'estado error'
+        })
+
+        socket.on('connect_error', () => {
+            estadoEl.innerText = '⚠️ Error de conexión'
+            estadoEl.className = 'estado error'
+        })
+
+        // ==========================
+        // Datos MQTT (desde backend)
+        // ==========================
+        socket.on('dato', (data) => {
+
+            // Validación mínima frontend
+            if (!data || typeof data.valor === 'undefined') {
+                console.warn('Dato inválido recibido:', data)
+                return
+            }
+
+            valorEl.innerText = data.valor
+            fechaEl.innerText = formatearFecha(data.timestamp)
+            maquinaEl.innerText = data.maquina || 'N/A'
+        })
+
+        // ==========================
+        // Utilidades
+        // ==========================
+        function formatearFecha(iso) {
+            if (!iso) return '--'
+
+            try {
+                const fecha = new Date(iso)
+                return fecha.toLocaleString()
+            } catch {
+                return iso
+            }
+        }
+
+        // ==========================
+        // Fallback inicial (REST)
+        // ==========================
+        async function cargarEstadoInicial() {
+            try {
+                const res = await fetch('/estado')
+                const data = await res.json()
+
+                valorEl.innerText = data.valor
+                fechaEl.innerText = formatearFecha(data.timestamp)
+                maquinaEl.innerText = data.maquina || 'N/A'
+
+            } catch (err) {
+                console.error('Error cargando estado inicial:', err)
+            }
+        }
+
+        cargarEstadoInicial()
+
+    </script>
+
+</body>
+</html>
